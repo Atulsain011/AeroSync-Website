@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AeroSync — Direct-to-device file transfer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect width='26' height='26' rx='6' fill='%23060810'/%3E%3Cpath d='M7.2 15.6a4 4 0 01.6-7.96 5.4 5.4 0 0110.36-1.7A4.6 4.6 0 0118 15.6H7.2z' stroke='%2300d9ff' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3Cpath d='M10.5 12.2v6M8.7 16.4l1.8 1.8 1.8-1.8' stroke='%2300d9ff' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M15 18.4v-6M13.2 14.2L15 12.4l1.8 1.8' stroke='%2300d9ff' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#060810;
+    --bg-panel:#0d1420;
+    --bg-panel-alt:#101827;
+    --bg-raised:#141d2e;
+    --border-subtle:rgba(230,240,255,0.08);
+    --border-strong:rgba(230,240,255,0.16);
+    --cyan:#00d9ff;
+    --violet:#7b61ff;
+    --mint:#34f5c5;
+    --text-primary:#eaf2ff;
+    --text-muted:#8291a8;
+    --text-dim:#4c5872;
+    --font-display:'Space Grotesk',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+    --container:1120px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+
+  body{
+    background:var(--bg-void);
+    color:var(--text-primary);
+    font-family:var(--font-body);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -5%, rgba(123,97,255,0.16), transparent 60%),
+      radial-gradient(ellipse 900px 600px at 90% 10%, rgba(0,217,255,0.12), transparent 60%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  a{color:inherit;text-decoration:none;}
+  img,svg{display:block;max-width:100%;}
+
+  .wrap{max-width:var(--container);margin:0 auto;padding:0 28px;position:relative;z-index:1;}
+
+  ::selection{background:var(--cyan);color:#04121a;}
+
+  a:focus-visible,button:focus-visible,.tab:focus-visible{
+    outline:2px solid var(--cyan);
+    outline-offset:3px;
+    border-radius:4px;
+  }
+
+  /* ---------- NAV ---------- */
+  header.nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(14px);
+    background:rgba(6,8,16,0.72);
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .nav-inner{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 28px;max-width:var(--container);margin:0 auto;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:0.01em;}
+  .brand .mark{width:26px;height:26px;}
+  .nav-links{display:flex;align-items:center;gap:32px;font-size:14px;color:var(--text-muted);}
+  .nav-links a{transition:color .2s ease;}
+  .nav-links a:hover{color:var(--text-primary);}
+  .nav-cta{
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--bg-raised);border:1px solid var(--border-strong);
+    padding:9px 16px;border-radius:8px;font-size:13.5px;font-weight:500;
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .nav-cta:hover{border-color:var(--cyan);background:var(--bg-panel-alt);}
+  .nav-toggle{display:none;}
+
+  /* ---------- HERO ---------- */
+  .hero{padding:96px 0 40px;position:relative;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--font-mono);font-size:12.5px;letter-spacing:0.06em;
+    color:var(--cyan);border:1px solid rgba(0,217,255,0.35);
+    background:rgba(0,217,255,0.06);
+    padding:6px 12px;border-radius:100px;margin-bottom:26px;
+  }
+  .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
+
+  h1.headline{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:clamp(38px,6vw,68px);
+    line-height:1.04;
+    letter-spacing:-0.02em;
+    max-width:820px;
+  }
+  h1.headline .accent{
+    background:linear-gradient(100deg,var(--cyan),var(--violet) 70%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{
+    margin-top:22px;
+    font-size:17.5px;
+    color:var(--text-muted);
+    max-width:560px;
+  }
+  .hero-ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px;}
+  .btn{
+    display:inline-flex;align-items:center;gap:10px;
+    font-family:var(--font-body);font-weight:600;font-size:14.5px;
+    padding:14px 22px;border-radius:10px;
+    transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+    border:1px solid transparent;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{
+    background:linear-gradient(100deg,var(--cyan),#3fa8ff 60%,var(--violet));
+    color:#03101a;
+    box-shadow:0 8px 30px -8px rgba(0,217,255,0.55);
+  }
+  .btn-secondary{
+    background:var(--bg-raised);
+    border-color:var(--border-strong);
+    color:var(--text-primary);
+  }
+  .btn-secondary:hover{border-color:var(--violet);}
+  .btn svg{width:17px;height:17px;flex-shrink:0;}
+
+  /* ---------- TRANSFER VISUAL ---------- */
+  .transfer-visual{
+    margin-top:64px;
+    border:1px solid var(--border-subtle);
+    background:linear-gradient(180deg,var(--bg-panel),var(--bg-void));
+    border-radius:18px;
+    padding:36px 20px 26px;
+    position:relative;
+    overflow:hidden;
+  }
+  .transfer-visual svg{width:100%;height:auto;}
+  .speed-readout{
+    display:flex;align-items:baseline;justify-content:center;gap:10px;
+    margin-top:8px;font-family:var(--font-mono);
+  }
+  .speed-readout .num{font-size:34px;font-weight:700;color:var(--cyan);letter-spacing:-0.01em;}
+  .speed-readout .unit{font-size:14px;color:var(--text-dim);}
+  .speed-caption{text-align:center;font-size:12.5px;color:var(--text-dim);margin-top:4px;letter-spacing:0.02em;}
+
+  .packet{filter:drop-shadow(0 0 6px rgba(0,217,255,0.8));}
+
+  /* ---------- SECTION SHELL ---------- */
+  section{padding:108px 0;position:relative;}
+  .section-head{max-width:600px;margin-bottom:56px;}
+  .kicker{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--violet);margin-bottom:14px;
+  }
+  h2.section-title{
+    font-family:var(--font-display);font-weight:600;
+    font-size:clamp(28px,4vw,40px);letter-spacing:-0.01em;line-height:1.15;
+  }
+  .section-desc{margin-top:14px;color:var(--text-muted);font-size:16px;}
+
+  /* ---------- APP PREVIEW MOCKUPS ---------- */
+  .previews{display:grid;grid-template-columns:1.35fr 0.85fr;gap:28px;align-items:start;}
+
+  .device-frame{
+    border-radius:16px;
+    border:1px solid var(--border-subtle);
+    background:var(--bg-panel);
+    overflow:hidden;
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.6);
+  }
+  .device-label{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);margin-bottom:14px;letter-spacing:0.04em;}
+
+  /* desktop mock */
+  .mock-desktop-bar{
+    display:flex;align-items:center;gap:8px;
+    padding:12px 16px;border-bottom:1px solid var(--border-subtle);
+    background:var(--bg-panel-alt);
+  }
+  .mock-dot{width:10px;height:10px;border-radius:50%;}
+  .mock-desktop-bar .mock-dot:nth-child(1){background:#ff5f57;}
+  .mock-desktop-bar .mock-dot:nth-child(2){background:#febc2e;}
+  .mock-desktop-bar .mock-dot:nth-child(3){background:#28c840;}
+  .mock-desktop-title{margin-left:8px;font-size:12.5px;color:var(--text-muted);font-family:var(--font-mono);}
+  .mock-desktop-status{
+    margin-left:auto;font-size:11px;color:var(--mint);font-family:var(--font-mono);
+    display:flex;align-items:center;gap:6px;
+  }
+  .mock-desktop-status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mint);}
+
+  .mock-body{display:flex;min-height:340px;}
+  .mock-sidebar{
+    width:150px;border-right:1px solid var(--border-subtle);
+    padding:18px 12px;display:flex;flex-direction:column;gap:4px;
+    background:var(--bg-panel);
+  }
+  .mock-nav-item{
+    font-size:12.5px;color:var(--text-muted);padding:8px 10px;border-radius:7px;
+    display:flex;align-items:center;gap:9px;
+  }
+  .mock-nav-item.active{background:rgba(0,217,255,0.1);color:var(--cyan);}
+  .mock-nav-item .dot{width:6px;height:6px;border-radius:2px;background:currentColor;opacity:0.7;flex-shrink:0;}
+
+  .mock-main{flex:1;padding:20px;display:flex;flex-direction:column;gap:16px;}
+  .mock-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .mock-stat{
+    background:var(--bg-panel-alt);border:1px solid var(--border-subtle);
+    border-radius:9px;padding:10px 12px;
+  }
+  .mock-stat .k{font-size:9.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;font-family:var(--font-mono);}
+  .mock-stat .v{font-size:15px;font-weight:600;margin-top:4px;font-family:var(--font-mono);}
+  .mock-drop{
+    flex:1;border:1.5px dashed var(--border-strong);border-radius:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    color:var(--text-dim);font-size:12.5px;background:rgba(0,217,255,0.02);
+  }
+  .mock-drop .ring{
+    width:44px;height:44px;border-radius:50%;
+    background:radial-gradient(circle,rgba(0,217,255,0.25),transparent 70%);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .mock-drop strong{color:var(--text-muted);font-weight:500;font-size:13px;}
+
+  /* mobile mock */
+  .phone-shell{
+    max-width:230px;margin:0 auto;
+    border:1px solid var(--border-subtle);
+    border-radius:34px;padding:8px;
+    background:var(--bg-panel);
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.6);
+  }
+  .phone-screen{
+    border-radius:26px;overflow:hidden;
+    background:linear-gradient(180deg,#f7f9ff,#eef1fb);
+    color:#1a2135;
+    min-height:420px;
+    padding:16px 14px 14px;
+    position:relative;
+  }
+  .phone-notch{
+    width:70px;height:16px;background:var(--bg-panel);border-radius:0 0 12px 12px;
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+  }
+  .phone-tabs{
+    display:flex;gap:6px;background:#fff;border-radius:100px;padding:4px;
+    margin-top:20px;box-shadow:0 1px 4px rgba(20,30,60,0.08);
+  }
+  .phone-tab{flex:1;text-align:center;font-size:10px;font-weight:600;padding:7px 0;border-radius:100px;color:#8892a8;}
+  .phone-tab.active{background:linear-gradient(100deg,#4b6bff,#8b5cf6);color:#fff;}
+  .phone-drop{
+    margin-top:18px;border:2px dashed #c7cdec;border-radius:16px;
+    padding:26px 10px;text-align:center;
+  }
+  .phone-drop .ring{
+    width:52px;height:52px;border-radius:14px;margin:0 auto 10px;
+    background:linear-gradient(135deg,#4b6bff,#8b5cf6);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .phone-drop strong{display:block;font-size:12.5px;}
+  .phone-drop span{display:block;font-size:10px;color:#9099b3;margin-top:3px;}
+  .phone-browse{
+    margin-top:14px;background:linear-gradient(100deg,#4b6bff,#8b5cf6);
+    color:#fff;text-align:center;font-size:11.5px;font-weight:600;
+    padding:10px;border-radius:100px;
+  }
+  .phone-rows{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+  .phone-row{
+    background:#fff;border-radius:10px;padding:9px 10px;font-size:10.5px;
+    display:flex;justify-content:space-between;align-items:center;color:#333c54;
+    box-shadow:0 1px 3px rgba(20,30,60,0.06);
+  }
+  .phone-row span.sub{display:block;font-size:9px;color:#9099b3;font-weight:400;}
+  .phone-secure{
+    margin-top:8px;background:#e8fbf3;border:1px solid #b9f0d8;border-radius:10px;
+    padding:9px 10px;font-size:9.5px;color:#1f7a55;font-weight:600;
+  }
+
+  /* ---------- ARCHITECTURE ---------- */
+  .arch{
+    border:1px solid var(--border-subtle);
+    background:var(--bg-panel);
+    border-radius:18px;
+    padding:44px 32px;
+  }
+  .arch-layer{
+    display:grid;grid-template-columns:150px 1fr;gap:24px;
+    padding:22px 0;
+  }
+  .arch-layer + .arch-layer{border-top:1px solid var(--border-subtle);}
+  .arch-layer-label{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);letter-spacing:0.04em;padding-top:6px;}
+  .arch-boxes{display:flex;flex-wrap:wrap;gap:12px;}
+  .arch-box{
+    border:1px solid var(--border-strong);background:var(--bg-panel-alt);
+    border-radius:10px;padding:12px 16px;font-size:13px;min-width:180px;
+    position:relative;
+  }
+  .arch-box .t{font-weight:600;font-size:13.5px;}
+  .arch-box .d{color:var(--text-muted);font-size:12px;margin-top:3px;}
+  .arch-box.core{border-color:rgba(0,217,255,0.4);}
+  .arch-flow-line{
+    height:1px;width:100%;background:linear-gradient(90deg,transparent,var(--border-strong),transparent);
+    margin:0;position:relative;overflow:visible;
+  }
+  .arch-connector{display:flex;justify-content:center;padding:6px 0;}
+  .arch-connector svg{width:16px;height:24px;color:var(--text-dim);}
+
+  /* ---------- FEATURES ---------- */
+  .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .feature-card{
+    border:1px solid var(--border-subtle);background:var(--bg-panel);
+    border-radius:14px;padding:26px 24px;transition:border-color .2s ease, transform .2s ease;
+  }
+  .feature-card:hover{border-color:rgba(0,217,255,0.35);transform:translateY(-3px);}
+  .feature-icon{
+    width:38px;height:38px;border-radius:10px;
+    background:rgba(0,217,255,0.08);border:1px solid rgba(0,217,255,0.2);
+    display:flex;align-items:center;justify-content:center;margin-bottom:16px;
+  }
+  .feature-icon svg{width:19px;height:19px;color:var(--cyan);}
+  .feature-card h3{font-family:var(--font-display);font-size:16.5px;font-weight:600;margin-bottom:8px;}
+  .feature-card p{font-size:13.8px;color:var(--text-muted);}
+
+  /* ---------- QUICK START ---------- */
+  .tabs-row{display:flex;gap:10px;margin-bottom:32px;}
+  .tab{
+    font-family:var(--font-mono);font-size:13px;padding:10px 18px;border-radius:8px;
+    border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer;
+    background:transparent;transition:all .2s ease;
+  }
+  .tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,217,255,0.06);}
+
+  .steps{display:none;flex-direction:column;gap:0;}
+  .steps.active{display:flex;}
+  .step{
+    display:grid;grid-template-columns:44px 1fr;gap:18px;padding:20px 0;
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .step:last-child{border-bottom:none;}
+  .step-num{
+    font-family:var(--font-mono);font-size:13px;color:var(--violet);
+    width:34px;height:34px;border:1px solid var(--border-strong);border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step h4{font-size:15px;font-weight:600;margin-bottom:4px;}
+  .step p{font-size:13.8px;color:var(--text-muted);}
+
+  /* ---------- SECURITY ---------- */
+  .security-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .sec-card{border:1px solid var(--border-subtle);background:var(--bg-panel);border-radius:14px;padding:24px;}
+  .sec-check{
+    width:30px;height:30px;border-radius:50%;background:rgba(52,245,197,0.1);
+    border:1px solid rgba(52,245,197,0.35);display:flex;align-items:center;justify-content:center;margin-bottom:14px;
+  }
+  .sec-check svg{width:15px;height:15px;color:var(--mint);}
+  .sec-card h3{font-size:15px;font-weight:600;margin-bottom:6px;font-family:var(--font-display);}
+  .sec-card p{font-size:13.5px;color:var(--text-muted);}
+
+  /* ---------- DOWNLOAD CTA ---------- */
+  .download-cta{
+    border:1px solid var(--border-subtle);
+    background:linear-gradient(135deg,rgba(0,217,255,0.08),rgba(123,97,255,0.08));
+    border-radius:20px;padding:64px 40px;text-align:center;
+  }
+  .download-cta h2{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);font-weight:600;margin-bottom:14px;}
+  .download-cta p{color:var(--text-muted);max-width:480px;margin:0 auto 32px;}
+  .download-row{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;}
+  .version-tag{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);margin-top:22px;}
+
+  /* ---------- FOOTER ---------- */
+  footer{padding:44px 0 60px;border-top:1px solid var(--border-subtle);margin-top:20px;}
+  .footer-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;}
+  .footer-row .brand{font-size:15px;}
+  .footer-links{display:flex;gap:24px;font-size:13px;color:var(--text-muted);}
+  .footer-links a:hover{color:var(--text-primary);}
+  .footer-credit{font-size:12.5px;color:var(--text-dim);margin-top:20px;}
+
+  /* ---------- REVEAL ---------- */
+  .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease, transform .7s ease;}
+  .reveal.in{opacity:1;transform:translateY(0);}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+    .reveal{opacity:1;transform:none;}
+  }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width:860px){
+    .nav-links{display:none;}
+    .previews{grid-template-columns:1fr;}
+    .arch-layer{grid-template-columns:1fr;gap:10px;}
+    .features-grid{grid-template-columns:1fr 1fr;}
+    .security-grid{grid-template-columns:1fr;}
+  }
+  @media (max-width:560px){
+    .features-grid{grid-template-columns:1fr;}
+    .mock-stat-row{grid-template-columns:repeat(2,1fr);}
+    .hero{padding:64px 0 20px;}
+    section{padding:72px 0;}
+    .download-cta{padding:44px 22px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 26 26" fill="none">
+        <path d="M7.2 15.6a4 4 0 01.6-7.96 5.4 5.4 0 0110.36-1.7A4.6 4.6 0 0118 15.6H7.2z" stroke="#00d9ff" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M10.5 12.2v6M8.7 16.4l1.8 1.8 1.8-1.8" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15 18.4v-6M13.2 14.2L15 12.4l1.8 1.8" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      AeroSync
+    </div>
+    <nav class="nav-links">
+      <a href="#preview">Preview</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#features">Features</a>
+      <a href="#quickstart">Quick Start</a>
+      <a href="#security">Security</a>
+    </nav>
+    <a class="nav-cta" href="https://github.com/Atulsain011/Aero_sync" target="_blank" rel="noopener">
+      GitHub ↗
+    </a>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="eyebrow">C++20 · ZERO-COPY ENGINE · v1.0.0</div>
+      <h1 class="headline">Send files at the <span class="accent">speed of your Wi-Fi</span>, not the speed of the cloud.</h1>
+      <p class="sub">AeroSync moves files directly between Windows and Android over your local network. No uploads, no compression, no throttling — just two devices talking to each other.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://github.com/Atulsain011/Aero_sync/releases/latest/download/AeroSync.exe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download for Windows
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/Atulsain011/Aero_sync/releases/latest/download/AeroSync.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download for Android
+        </a>
+      </div>
+
+      <div class="transfer-visual reveal" id="transferVisual">
+        <svg viewBox="0 0 800 170" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="pathGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#00d9ff"/><stop offset="1" stop-color="#7b61ff"/>
+            </linearGradient>
+            <radialGradient id="dotGrad"><stop offset="0" stop-color="#eafcff"/><stop offset="1" stop-color="#00d9ff"/></radialGradient>
+          </defs>
+
+          <!-- laptop glyph -->
+          <g transform="translate(70,60)">
+            <rect x="0" y="0" width="70" height="46" rx="6" fill="#101827" stroke="#2a3650"/>
+            <rect x="7" y="7" width="56" height="32" rx="2" fill="#0a1120"/>
+            <rect x="-8" y="46" width="86" height="7" rx="3" fill="#141d2e" stroke="#2a3650"/>
+          </g>
+
+          <!-- phone glyph -->
+          <g transform="translate(660,40)">
+            <rect x="0" y="0" width="40" height="70" rx="9" fill="#101827" stroke="#2a3650"/>
+            <rect x="5" y="8" width="30" height="50" rx="2" fill="#0a1120"/>
+          </g>
+
+          <path id="flowPath" d="M 145 83 C 300 20, 480 150, 655 75" fill="none" stroke="url(#pathGrad)" stroke-width="1.5" stroke-dasharray="3 7" opacity="0.55"/>
+
+          <circle r="5" fill="url(#dotGrad)" class="packet">
+            <animateMotion dur="3.4s" repeatCount="indefinite" begin="0s"><mpath href="#flowPath"/></animateMotion>
+          </circle>
+          <circle r="4" fill="url(#dotGrad)" class="packet" opacity="0.85">
+            <animateMotion dur="3.4s" repeatCount="indefinite" begin="0.85s"><mpath href="#flowPath"/></animateMotion>
+          </circle>
+          <circle r="4" fill="url(#dotGrad)" class="packet" opacity="0.7">
+            <animateMotion dur="3.4s" repeatCount="indefinite" begin="1.7s"><mpath href="#flowPath"/></animateMotion>
+          </circle>
+          <circle r="3.5" fill="url(#dotGrad)" class="packet" opacity="0.55">
+            <animateMotion dur="3.4s" repeatCount="indefinite" begin="2.55s"><mpath href="#flowPath"/></animateMotion>
+          </circle>
+        </svg>
+        <div class="speed-readout"><span class="num" id="speedNum">0.0</span><span class="unit">MB/s sustained · direct P2P LAN</span></div>
+        <div class="speed-caption">Simulated throughput readout — actual speeds depend on your network hardware</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PREVIEW -->
+  <section id="preview">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Interface</div>
+        <h2 class="section-title">One engine, two native shells</h2>
+        <p class="section-desc">A glass-panel desktop app for Windows, and a Material 3 mobile client for Android — each built for its platform, both talking the same wire protocol.</p>
+      </div>
+      <div class="previews">
+        <div class="reveal">
+          <div class="device-label">Windows — Tauri v2 + React</div>
+          <div class="device-frame">
+            <div class="mock-desktop-bar">
+              <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+              <span class="mock-desktop-title">AeroSync</span>
+              <span class="mock-desktop-status">Ready</span>
+            </div>
+            <div class="mock-body">
+              <div class="mock-sidebar">
+                <div class="mock-nav-item active"><span class="dot"></span>Home</div>
+                <div class="mock-nav-item"><span class="dot"></span>Devices</div>
+                <div class="mock-nav-item"><span class="dot"></span>Transfers</div>
+                <div class="mock-nav-item"><span class="dot"></span>History</div>
+                <div class="mock-nav-item"><span class="dot"></span>Settings</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-stat-row">
+                  <div class="mock-stat"><div class="k">Nearby</div><div class="v">0</div></div>
+                  <div class="mock-stat"><div class="k">Active</div><div class="v">Idle</div></div>
+                  <div class="mock-stat"><div class="k">Network</div><div class="v" style="color:var(--mint);font-size:12px;">Connected</div></div>
+                  <div class="mock-stat"><div class="k">Free</div><div class="v" style="font-size:13px;">43.1 GB</div></div>
+                </div>
+                <div class="mock-drop">
+                  <div class="ring">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d9ff" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                  <strong>Drag &amp; drop files or folders</strong>
+                  <span>or click to browse local storage</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal">
+          <div class="device-label">Android — Jetpack Compose</div>
+          <div class="phone-shell">
+            <div class="phone-screen">
+              <div class="phone-notch"></div>
+              <div class="phone-tabs">
+                <div class="phone-tab active">Files</div>
+                <div class="phone-tab">Devices</div>
+                <div class="phone-tab">Activity</div>
+              </div>
+              <div class="phone-drop">
+                <div class="ring">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <strong>Drop files here</strong>
+                <span>or tap to pick files</span>
+              </div>
+              <div class="phone-browse">Browse Files</div>
+              <div class="phone-rows">
+                <div class="phone-row">Settings &amp; Status <span>›</span></div>
+                <div class="phone-row">Nearby Peers <span>›</span></div>
+                <div class="phone-row">Recent Transfers <span>›</span></div>
+              </div>
+              <div class="phone-secure">🔒 Secure · Private · Local Transfer</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Under the hood</div>
+        <h2 class="section-title">Three layers, one shared core</h2>
+        <p class="section-desc">Both clients are thin native shells over a single C++20 engine — so discovery, pairing, and transfer logic behave identically on either platform.</p>
+      </div>
+      <div class="arch reveal">
+        <div class="arch-layer">
+          <div class="arch-layer-label">01 · PRESENTATION</div>
+          <div class="arch-boxes">
+            <div class="arch-box"><div class="t">Windows Client</div><div class="d">React 18 + TypeScript, Tauri v2 shell</div></div>
+            <div class="arch-box"><div class="t">Android Client</div><div class="d">Kotlin, Jetpack Compose, Material 3</div></div>
+          </div>
+        </div>
+        <div class="arch-connector">
+          <svg viewBox="0 0 16 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v18m0 0l-5-5m5 5l5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">02 · INTEROP</div>
+          <div class="arch-boxes">
+            <div class="arch-box"><div class="t">Tauri IPC Bridge</div><div class="d">Native daemon process on Windows</div></div>
+            <div class="arch-box"><div class="t">JNI Bridge</div><div class="d">libaerosync_native.so on Android</div></div>
+          </div>
+        </div>
+        <div class="arch-connector">
+          <svg viewBox="0 0 16 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v18m0 0l-5-5m5 5l5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">03 · CORE ENGINE</div>
+          <div class="arch-boxes">
+            <div class="arch-box core"><div class="t">Discovery</div><div class="d">UDP beacon + mDNS, &lt;50ms</div></div>
+            <div class="arch-box core"><div class="t">Pairing &amp; Auth</div><div class="d">PIN / QR handshake state machine</div></div>
+            <div class="arch-box core"><div class="t">Connection Manager</div><div class="d">TCP keep-alive sessions</div></div>
+            <div class="arch-box core"><div class="t">Transfer Engine</div><div class="d">Zero-copy ring buffers</div></div>
+            <div class="arch-box core"><div class="t">Protocol</div><div class="d">Serialized with Protobuf</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Capabilities</div>
+        <h2 class="section-title">Built for the whole file, not a compressed copy of it</h2>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke-linejoin="round"/></svg></div>
+          <h3>100+ MB/s throughput</h3>
+          <p>Zero-copy buffer streaming moves 4K video, ISOs, and full game folders in seconds instead of minutes.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></div>
+          <h3>Zero-config discovery</h3>
+          <p>UDP beacon broadcasts and mDNS find nearby Windows and Android devices in under 50ms — no pairing codes to hunt for.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
+          <h3>Secure pairing</h3>
+          <p>A one-time 6-digit PIN or QR handshake keeps unrecognized devices off your transfer session on shared Wi-Fi.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></div>
+          <h3>Batch &amp; deep folders</h3>
+          <p>Send single files, multi-gigabyte archives, or nested directory trees with SHA-256 / CRC32 integrity checks built in.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
+          <h3>Glass desktop UI</h3>
+          <p>A lightweight React + Tauri interface under 5MB, styled with a translucent, low-noise dark theme.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg></div>
+          <h3>Native Android client</h3>
+          <p>Material 3 design, dark mode, live speed gauges, and a background service so transfers survive app-switching.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK START -->
+  <section id="quickstart">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Getting started</div>
+        <h2 class="section-title">From download to first transfer</h2>
+      </div>
+      <div class="tabs-row reveal">
+        <button class="tab active" data-tab="windows">Windows</button>
+        <button class="tab" data-tab="android">Android</button>
+      </div>
+
+      <div class="steps active reveal" data-steps="windows">
+        <div class="step"><div class="step-num">1</div><div><h4>Download AeroSync.exe</h4><p>Grab the latest release binary from the GitHub releases page.</p></div></div>
+        <div class="step"><div class="step-num">2</div><div><h4>Run the installer</h4><p>Launch AeroSync.exe directly, or use Start_AeroSync_Desktop.bat.</p></div></div>
+        <div class="step"><div class="step-num">3</div><div><h4>Allow SmartScreen</h4><p>If Defender SmartScreen prompts you, choose More Info → Run anyway.</p></div></div>
+        <div class="step"><div class="step-num">4</div><div><h4>Allow the firewall rule</h4><p>Accept the Windows Firewall prompt on Private networks so peers can reach you.</p></div></div>
+      </div>
+
+      <div class="steps" data-steps="android">
+        <div class="step"><div class="step-num">1</div><div><h4>Download AeroSync.apk</h4><p>Grab the latest APK from the GitHub releases page.</p></div></div>
+        <div class="step"><div class="step-num">2</div><div><h4>Enable unknown sources</h4><p>Allow installs from your browser or file manager when prompted.</p></div></div>
+        <div class="step"><div class="step-num">3</div><div><h4>Grant permissions</h4><p>Approve Nearby Devices, Wi-Fi, and Storage/Media access.</p></div></div>
+        <div class="step"><div class="step-num">4</div><div><h4>Join the same network</h4><p>Connect your phone and PC to the same Wi-Fi, or hotspot the PC off your phone.</p></div></div>
+        <div class="step"><div class="step-num">5</div><div><h4>Tap to pair</h4><p>Your devices appear automatically in the radar view — tap one to start transferring.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section id="security">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Trust</div>
+        <h2 class="section-title">Nothing leaves your network</h2>
+      </div>
+      <div class="security-grid">
+        <div class="sec-card reveal">
+          <div class="sec-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>No remote servers</h3>
+          <p>Transfers stay fully peer-to-peer over your local network — no metadata, logs, or file contents touch a cloud server.</p>
+        </div>
+        <div class="sec-card reveal">
+          <div class="sec-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>PIN-protected pairing</h3>
+          <p>Unrecognized devices can't initiate a transfer without a one-time verification step.</p>
+        </div>
+        <div class="sec-card reveal">
+          <div class="sec-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Verified integrity</h3>
+          <p>Every chunk is checked with rolling checksums, so what arrives is byte-for-byte what was sent.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD CTA -->
+  <section id="download">
+    <div class="wrap">
+      <div class="download-cta reveal">
+        <h2>Two devices. One local network. That's it.</h2>
+        <p>No accounts, no cloud step, no size limits — install the client for your platform and start moving files.</p>
+        <div class="download-row">
+          <a class="btn btn-primary" href="https://github.com/Atulsain011/Aero_sync/releases/latest/download/AeroSync.exe">Download for Windows</a>
+          <a class="btn btn-secondary" href="https://github.com/Atulsain011/Aero_sync/releases/latest/download/AeroSync.apk">Download for Android</a>
+        </div>
+        <div class="version-tag">v1.0.0 · MIT Licensed · Windows 10/11 x64 · Android 8.0+</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-row">
+      <div class="brand">AeroSync</div>
+      <div class="footer-links">
+        <a href="https://github.com/Atulsain011/Aero_sync" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/Atulsain011/Aero_sync/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/Atulsain011/Aero_sync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+    </div>
+    <div class="footer-credit">Crafted by Atul (Atulsain011). This page is an independently built preview generated from the project README.</div>
+  </div>
+</footer>
+
+<script>
+  // Reveal on scroll
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+  },{threshold:0.15});
+  revealEls.forEach(el=>io.observe(el));
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.steps').forEach(s=>s.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelector(`.steps[data-steps="${tab.dataset.tab}"]`).classList.add('active');
+    });
+  });
+
+  // Speed counter synced loosely to the packet loop (3.4s)
+  const speedEl = document.getElementById('speedNum');
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!prefersReduced && speedEl){
+    let target = 0, current = 0;
+    function newTarget(){ target = 95 + Math.random()*40; }
+    newTarget();
+    setInterval(()=>{
+      current += (target-current)*0.12;
+      if(Math.abs(target-current) < 0.5) newTarget();
+      speedEl.textContent = current.toFixed(1);
+    }, 60);
+  } else if(speedEl){
+    speedEl.textContent = "127.4";
+  }
+</script>
+
+</body>
+</html>
